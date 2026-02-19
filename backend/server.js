@@ -29,11 +29,11 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// API密钥配置（实际使用时应从环境变量读取）
+// API密钥配置
 const API_KEYS = {
-    deepseek: 'your-deepseek-api-key',
-    qwen: 'your-qwen-api-key',
-    zhipu: 'your-zhipu-api-key'
+    deepseek: 'sk-8c936c92aa324440a5f703d0e0fd74db',
+    qwen: 'sk-f3b9811496fa4fe0aa05cd5563118b9a',
+    zhipu: 'dba23fe8284e4aa592a7faf6151f0e1a.zdwNqnENJOeOtnv6'
 };
 
 // 预处理图像
