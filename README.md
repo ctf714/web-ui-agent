@@ -1,127 +1,99 @@
-# AI看手相小工具
+# Web UI Agent
 
-一个基于AI技术的手相分析工具，集成了deepseek、千问、智谱三家API，支持手相图像分析、结果展示和分享到小红书等功能。
+基于智谱视觉理解 MCP 的 Web UI Agent 项目，实现一个单步循环的 GUI Agent，能够根据自然语言指令和当前网页截图，调用智谱视觉 MCP 工具决定下一步操作，并通过 Playwright 执行浏览器动作。
 
-## 功能特性
+## 项目架构
 
-- 📷 手相图像采集和上传
-- 🖼️ 图像预处理和优化
-- 🤖 多AI模型联合分析
-- 📊 详细的手相分析报告
-- 📱 支持分享到小红书
-- 💰 内置变现功能
+- `main.py`: 入口脚本，解析命令行参数，启动 Agent
+- `agent.py`: Agent 核心类，实现主循环
+- `perception.py`: 负责获取页面截图和管理截图文件
+- `planner.py`: 与智谱视觉 MCP 交互，调用合适的工具获取动作规划
+- `executor.py`: 执行具体动作（点击、输入等）
+- `mcp_client.py`: MCP 客户端封装，负责连接和管理智谱视觉 MCP 服务器
+- `config.py`: 加载配置（如 MCP 服务器路径、最大步数等）
+- `utils.py`: 工具函数（如截图保存、日志设置）
+- `requirements.txt`: 列出所有依赖
+- `.env.example`: 环境变量模板
 
-## 技术架构
+## 安装步骤
 
-- **前端**: HTML5, CSS3, JavaScript
-- **后端**: Node.js, Express
-- **AI接口**: deepseek, 千问, 智谱
-- **图像处理**: Sharp
-- **文件上传**: Multer
+### 1. 安装 Node.js 和智谱视觉 MCP 服务器
 
-## 项目结构
+1. 下载并安装 Node.js (v18.0.0+): https://nodejs.org/en/download/
+2. 安装智谱视觉 MCP 服务器:
+   ```bash
+   npm install -g @z_ai/mcp-server@latest
+   ```
+3. 启动 MCP 服务器:
+   ```bash
+   # 设置 API 密钥
+   export Z_AI_API_KEY=dba23fe8284e4aa592a7faf6151f0e1a.zdwNqnENJOeOtnv6
+   
+   # 启动服务器
+   mcp-server
+   ```
 
-```
-ai-hand-palm-reader/
-├── frontend/           # 前端代码
-│   └── index.html      # 主页面
-├── backend/            # 后端代码
-│   ├── server.js       # 服务器入口
-│   ├── api/            # API接口
-│   ├── services/       # 业务逻辑
-│   ├── utils/          # 工具函数
-│   └── uploads/        # 临时上传目录
-├── package.json        # 项目配置
-└── README.md           # 项目说明
-```
+### 2. 配置 Python 环境
 
-## 快速开始
+1. 创建并激活虚拟环境:
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate  # Windows
+   # 或 source venv/bin/activate  # Linux/Mac
+   ```
 
-### 1. 安装依赖
+2. 安装依赖:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. 配置环境变量:
+   ```bash
+   # 复制环境变量模板
+   copy .env.example .env  # Windows
+   # 或 cp .env.example .env  # Linux/Mac
+   
+   # 编辑 .env 文件，配置 API 密钥
+   ```
+
+4. 安装 Playwright 浏览器:
+   ```bash
+   playwright install
+   ```
+
+## 运行示例
 
 ```bash
-npm install
+# 在百度搜索人工智能
+python main.py --task "在百度搜索人工智能"
+
+# 无头模式运行
+python main.py --task "在百度搜索人工智能" --headless true
+
+# 设置最大步数
+python main.py --task "在百度搜索人工智能" --max-steps 15
 ```
 
-### 2. 配置API密钥
+## 工作原理
 
-在 `backend/server.js` 文件中配置你的API密钥：
+1. **感知**: 使用 Playwright 获取当前页面截图
+2. **规划**: 调用智谱视觉 MCP 的 `image_analysis` 工具分析截图，生成动作规划
+3. **执行**: 根据动作规划，使用 Playwright 执行浏览器动作
+4. **循环**: 重复上述步骤，直到任务完成或达到最大步数
 
-```javascript
-const API_KEYS = {
-    deepseek: 'your-deepseek-api-key',
-    qwen: 'your-qwen-api-key',
-    zhipu: 'your-zhipu-api-key'
-};
-```
+## 动作类型
 
-### 3. 启动服务器
-
-```bash
-npm start
-```
-
-或使用开发模式：
-
-```bash
-npm run dev
-```
-
-### 4. 访问应用
-
-打开浏览器，访问 `http://localhost:3000`
-
-## 使用方法
-
-1. **上传手相照片**: 点击 "点击上传手相照片" 按钮，选择一张清晰的手相照片
-2. **预览图像**: 确认上传的图像是否清晰可见
-3. **开始分析**: 点击 "开始分析" 按钮，系统会自动处理图像并调用AI模型进行分析
-4. **查看结果**: 分析完成后，会显示详细的手相分析报告
-5. **分享结果**: 可以选择分享到小红书或保存分析结果
-
-## 小红书变现策略
-
-1. **免费基础分析**: 提供基础的手相分析功能，吸引用户
-2. **付费详细报告**: 提供更详细、深入的手相分析报告
-3. **会员订阅**: 推出会员服务，享受无限次分析和专属功能
-4. **广告合作**: 与相关品牌合作，在应用中展示广告
-5. ** affiliate marketing**: 推荐相关产品，获得佣金
-
-## API文档
-
-详细的API文档请参考 [API.md](./API.md) 文件，包含：
-
-- 接口列表和参数说明
-- 请求和响应格式
-- 多种编程语言的使用示例
-- 错误代码和解决方案
-- 性能优化建议
-
-### 主要接口
-
-| 接口 | 方法 | 描述 |
-|------|------|------|
-| `/api/analyze` | POST | 上传手相图像并进行分析 |
-| `/api/health` | GET | 检查系统健康状态 |
+- `click`: 点击页面元素
+- `type`: 输入文本
+- `scroll`: 滚动页面
+- `navigate`: 导航到 URL
+- `wait`: 等待
+- `complete`: 任务完成
 
 ## 注意事项
 
-1. 请确保上传的手相照片清晰可见，手掌张开，光线充足
-2. 本工具仅供娱乐参考，不构成专业的命理咨询
-3. 请遵守相关法律法规，不要利用本工具进行违法活动
-4. 保护用户隐私，不要存储或分享用户的手相照片
-
-## 许可证
-
-MIT License
-
-## 贡献
-
-欢迎提交Issue和Pull Request，一起完善这个项目！
-
-## 联系方式
-
-如有问题或建议，请通过以下方式联系：
-
-- Email: your-email@example.com
-- GitHub: your-github-username
+1. 确保智谱视觉 MCP 服务器已启动并运行在 `http://localhost:8000`
+2. 确保 `.env` 文件中的 `Z_AI_API_KEY` 已正确配置
+3. 首次运行时，Playwright 会自动下载所需的浏览器
+4. 任务执行过程中，会在 `./screenshots/` 目录下保存每一步的截图
+5. 详细日志会记录在 `agent.log` 文件中
