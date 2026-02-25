@@ -1,6 +1,7 @@
 import time
 from typing import Dict, Any, Optional
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
 from playwright.async_api import Page
 from planner import Action
 
@@ -38,6 +39,8 @@ class Executor:
                 result = await self._execute_navigate(page, params)
             elif action_type == "wait":
                 result = await self._execute_wait(params)
+            elif action_type == "backtrack":
+                result = await self._execute_backtrack(page)
             elif action_type == "complete":
                 result = self._execute_complete(params)
             else:
@@ -53,49 +56,22 @@ class Executor:
     async def _execute_click(self, page: Page, params: Dict[str, Any]) -> str:
         """
         执行点击动作
-        
-        Args:
-            page: Playwright 页面对象
-            params: 动作参数，包含 x 和 y（归一化坐标 0-1000）
-            
-        Returns:
-            执行结果
         """
         try:
-            # 获取归一化坐标
             x_norm = params.get("x", 0)
             y_norm = params.get("y", 0)
             
-            # 获取页面视口大小
             viewport_size = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
             width = viewport_size.get("width", 1920)
             height = viewport_size.get("height", 1080)
             
-            # 转换为实际坐标
             x = int((x_norm / 1000) * width)
             y = int((y_norm / 1000) * height)
             
             logger.info(f"点击坐标: ({x}, {y}) (归一化坐标: ({x_norm}, {y_norm}))")
+            await page.mouse.click(x, y)
             
-            try:
-                # 第一种方式：使用 Playwright 鼠标点击
-                await page.mouse.click(x, y)
-                logger.info("使用 Playwright 鼠标点击成功")
-            except Exception as e:
-                # 第一种方式失败，尝试第二种方式
-                logger.warning(f"Playwright 鼠标点击失败: {e}")
-                logger.info("尝试使用 JavaScript 元素点击")
-                # 第二种方式：使用 JavaScript 直接点击元素
-                await page.evaluate(f"document.elementFromPoint({x}, {y})?.click()")
-                logger.info("使用 JavaScript 元素点击完成")
-            
-            # 等待页面响应
-            try:
-                await page.wait_for_load_state("networkidle", timeout=5000)
-            except:
-                # 如果 networkidle 超时，使用简短的固定等待
-                await page.wait_for_timeout(1000)
-            
+            await page.wait_for_timeout(1000)
             return f"点击坐标: ({x}, {y})"
             
         except Exception as e:
@@ -105,28 +81,14 @@ class Executor:
     async def _execute_type(self, page: Page, params: Dict[str, Any]) -> str:
         """
         执行输入动作
-        
-        Args:
-            page: Playwright 页面对象
-            params: 动作参数，包含 text（输入文本）和可选的 x、y（归一化坐标 0-1000）
-            
-        Returns:
-            执行结果
         """
         try:
             text = params.get("text", "")
             
-            # 如果提供了坐标，先点击该位置
             if "x" in params and "y" in params:
-                click_params = {"x": params["x"], "y": params["y"]}
-                await self._execute_click(page, click_params)
+                await self._execute_click(page, params)
             
-            # 执行输入
             await page.keyboard.type(text)
-            
-            # 等待页面响应
-            await page.wait_for_load_state("networkidle", timeout=10000)
-            
             return f"输入文本: {text}"
             
         except Exception as e:
@@ -148,12 +110,10 @@ class Executor:
             direction = params.get("direction", "down")
             distance = params.get("distance", 500)
             
-            # 转换距离为像素值
-            pixel_distance = int((distance / 1000) * 1000)  # 最大滚动 1000 像素
+            pixel_distance = int((distance / 1000) * 1000)
             
             logger.info(f"滚动方向: {direction}, 距离: {pixel_distance} 像素")
             
-            # 执行滚动
             if direction == "up":
                 await page.mouse.wheel(0, -pixel_distance)
             elif direction == "down":
@@ -163,7 +123,6 @@ class Executor:
             elif direction == "right":
                 await page.mouse.wheel(pixel_distance, 0)
             
-            # 等待页面响应
             await page.wait_for_load_state("networkidle", timeout=10000)
             
             return f"滚动 {direction} {pixel_distance} 像素"
@@ -186,9 +145,12 @@ class Executor:
         try:
             url = params.get("url", "")
             
+            if url and not url.startswith(('http://', 'https://')):
+                url = f"https://{url}"
+                logger.info(f"添加协议前缀: {url}")
+            
             logger.info(f"导航到: {url}")
             
-            # 执行导航
             await page.goto(url, wait_until="networkidle", timeout=30000)
             
             return f"导航到: {url}"
@@ -212,7 +174,6 @@ class Executor:
             
             logger.info(f"等待 {duration} 秒")
             
-            # 执行等待
             time.sleep(duration)
             
             return f"等待 {duration} 秒"
@@ -221,6 +182,19 @@ class Executor:
             logger.error(f"执行等待动作失败: {e}")
             return f"等待失败: {e}"
     
+    async def _execute_backtrack(self, page: Page) -> str:
+        """
+        执行回退动作 (Go Back)
+        """
+        try:
+            logger.info("执行页面回退 (Go Back)")
+            await page.go_back()
+            await page.wait_for_timeout(1000)
+            return "成功回退到上一页"
+        except Exception as e:
+            logger.error(f"回退失败: {e}")
+            return f"回退失败: {e}"
+
     def _execute_complete(self, params: Dict[str, Any]) -> str:
         """
         执行完成动作

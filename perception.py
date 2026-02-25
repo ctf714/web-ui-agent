@@ -1,7 +1,7 @@
 import os
-from typing import Optional
 from playwright.async_api import Page
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
 from config import SCREENSHOTS_DIR
 
 class Perception:
@@ -23,12 +23,8 @@ class Perception:
             截图文件路径
         """
         try:
-            # 生成截图文件名
             screenshot_path = os.path.join(SCREENSHOTS_DIR, f"step_{step}.png")
-            
-            # 获取页面截图
-            await page.screenshot(path=screenshot_path, full_page=True)
-            
+            await page.screenshot(path=screenshot_path, full_page=False)
             logger.info(f"已保存截图到: {screenshot_path}")
             return screenshot_path
             

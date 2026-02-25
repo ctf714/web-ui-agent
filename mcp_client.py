@@ -2,9 +2,10 @@ import time
 import base64
 import io
 from typing import Dict, Any, Optional, List
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
 from config import GEMINI_API_KEY
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 
 class MCPError(Exception):
@@ -33,13 +34,11 @@ class MCPClient:
                 "ask_gemini": {"name": "ask_gemini"}
             }
             
-            # 配置 Gemini API
-            genai.configure(api_key=self.api_key)
+            # 初始化 Gemini Client
+            self.client = genai.Client(api_key=self.api_key)
+            self.model_id = "gemini-2.5-flash"  # 按照用户要求，使用 2.5 flash
             
-            # 创建模型实例
-            self.model = genai.GenerativeModel("gemini-2.5-flash")
-            
-            logger.info(f"MCP 客户端初始化成功，使用 Gemini API SDK")
+            logger.info(f"MCP 客户端初始化成功，使用新版 google-genai SDK")
         except Exception as e:
             logger.error(f"MCP 客户端初始化失败: {e}")
             raise MCPConnectionError(f"无法初始化 Gemini API: {e}")
@@ -106,9 +105,10 @@ class MCPClient:
                             contents.append(pil_image)
                     
                     # 调用 Gemini API
-                    response = self.model.generate_content(
-                        contents,
-                        generation_config={
+                    response = self.client.models.generate_content(
+                        model=self.model_id,
+                        contents=contents,
+                        config={
                             "temperature": 0.6,
                             "max_output_tokens": 2048
                         }
@@ -152,32 +152,41 @@ class MCPClient:
                 logger.warning(f"工具 {tool_name} 调用失败，正在重试 ({retries}/{max_retries}): {e}")
                 time.sleep(retry_delay)
     
-    def analyze_image(self, image_path: str, prompt: str) -> Dict[str, Any]:
+    def generate_content(self, image_path: str, prompt: str) -> Dict[str, Any]:
         """
-        分析图像
+        生成内容（支持图像分析或纯文本处理）
         
         Args:
-            image_path: 图像文件路径
-            prompt: 分析提示词
+            image_path: 图像文件路径（可选，为空时只处理文本）
+            prompt: 提示词
             
         Returns:
-            分析结果
+            生成结果
         """
         try:
-            # 读取图像文件并转换为 PIL Image 对象
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
+            # 构建内容列表
+            contents = [prompt]
             
-            # 将字节转换为 PIL Image
-            image = Image.open(io.BytesIO(image_bytes))
+            # 如果提供了图像路径且不为空，添加图像
+            if image_path:
+                # 读取图像文件并转换为 PIL Image 对象
+                with open(image_path, "rb") as f:
+                    image_bytes = f.read()
+                
+                # 将字节转换为 PIL Image
+                image = Image.open(io.BytesIO(image_bytes))
+                contents.append(image)
+                logger.info(f"开始分析图像: {image_path}")
+            else:
+                logger.info("无图像分析，仅处理文本提示")
             
-            logger.info(f"开始分析图像: {image_path}")
             logger.info(f"分析提示词: {prompt[:100]}...")  # 只显示提示词的前100个字符
             
-            # 调用 Gemini API，使用 PIL Image 对象
-            result = self.model.generate_content(
-                [prompt, image],
-                generation_config={
+            # 调用 Gemini API
+            result = self.client.models.generate_content(
+                model=self.model_id,
+                contents=contents,
+                config={
                     "temperature": 0.6,
                     "max_output_tokens": 2048
                 }
@@ -198,38 +207,6 @@ class MCPClient:
             }
         except Exception as e:
             logger.error(f"分析图像失败: {e}")
-            # 出错时返回默认结果，对于打开百度首页的任务，直接返回导航动作
-            if "打开百度首页" in prompt:
-                # 检查当前页面是否已经是百度首页
-                # 由于我们无法直接访问浏览器状态，这里使用一个简单的策略：
-                # 第一次尝试导航，之后返回完成动作
-                import re
-                # 从图像路径中提取步骤号
-                step_match = re.search(r'step_(\d+)\.png', image_path)
-                if step_match:
-                    step = int(step_match.group(1))
-                    if step > 1:
-                        # 如果已经尝试过导航，返回完成动作
-                        return {
-                            "output": f"分析图像失败: {e}，但已尝试导航到百度首页，任务完成",
-                            "action": {
-                                "action_type": "complete",
-                                "params": {
-                                    "message": "已成功打开百度首页"
-                                }
-                            }
-                        }
-                # 第一次尝试，返回导航动作
-                return {
-                    "output": f"分析图像失败: {e}，使用默认导航动作",
-                    "action": {
-                        "action_type": "navigate",
-                        "params": {
-                            "url": "https://www.baidu.com"
-                        }
-                    }
-                }
-            # 其他任务返回等待动作
             return {
                 "output": f"分析图像失败: {e}",
                 "action": {

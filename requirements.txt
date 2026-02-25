@@ -2,4 +2,7 @@ playwright
 python-dotenv
 requests
 loguru
-google-generativeai
+google-genai
+Pillow
+flask
+flask-cors

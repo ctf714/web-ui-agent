@@ -1,6 +1,7 @@
 import asyncio
-from typing import Dict, Any, List
-from loguru import logger
+from typing import Dict, Any, List, Optional
+import logging
+logger = logging.getLogger(__name__)
 from playwright.async_api import async_playwright, Browser, Page
 from perception import Perception
 from planner import Planner
@@ -40,6 +41,12 @@ class WebUIAgent:
             # 主循环
             for step in range(1, self.max_steps + 1):
                 logger.info(f"\n=== 步骤 {step}/{self.max_steps} ===")
+                
+                # 0. 容错改进：检查页面是否失效或关闭
+                if not self.page or self.page.is_closed():
+                    logger.warning("检测到浏览器页面已关闭或未初始化，尝试恢复...")
+                    await self._start_browser()
+                
                 logger.info(f"当前任务: {self.task}")
                 
                 # 1. 感知：获取页面截图
@@ -47,6 +54,10 @@ class WebUIAgent:
                 
                 # 2. 规划：生成动作规划
                 action = self.planner.generate_plan(screenshot_path, self.task, self.step_history)
+                
+                # 交互增强：打印 Agent 的思考过程
+                if action.thought:
+                    logger.info(f"Agent 思考: {action.thought}")
                 
                 # 3. 执行：执行动作
                 result = await self.executor.execute(self.page, action)
